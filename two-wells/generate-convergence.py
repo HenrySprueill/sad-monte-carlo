@@ -28,7 +28,7 @@ def normalize_S(S):
     S = S - max(S)
     total = np.sum(np.exp(S)*dE)
     return S - np.log(total)
-if not os.path.exists(system.name()+'.npz'):
+if not os.path.exists(system.name()+'-new.npz'):
 
     correct_S = normalize_S(system.S(E))
 
@@ -154,5 +154,6 @@ def generate_npz_tempering(fname):
 from multiprocessing import Pool
 
 if __name__ == '__main__':
-    with Pool(8) as p:
-        p.map(generate_npz, list(paths))
+    pass
+    # with Pool(8) as p:
+    #     p.map(generate_npz, list(paths))
