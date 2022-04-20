@@ -6,9 +6,10 @@ import matplotlib.pyplot as plt
 import system
 import styles
 import heat_capacity
+from scipy.interpolate import interp1d
 
 class Results:
-    def __init__(self):
+    def __init__(self, E=None, T=None, S=None, C=None):
         self.fnames = []
         self.mean_e=dict()
         self.mean_which=dict()
@@ -20,8 +21,36 @@ class Results:
         self.moves=dict()
         self.errors_S=dict()
         self.errors_C=dict()
+        self.interp_S=dict()
+        self.interp_C=dict()
+        self.interp_errors_S=dict()
+        self.interp_errors_C=dict()
+
+        if E is None or S is None:
+            self.exact_S = None
+        else:
+            self.exact_S = interp1d(E, S, 
+                                bounds_error=False,
+                                fill_value=np.NaN)
+        if T is None or C is None:
+            self.exact_C = None
+        else:
+            self.exact_C = interp1d(E, S, 
+                                bounds_error=False,
+                                fill_value=np.NaN)
     
-    def _query_fname(self, fname):
+    def set_exact_data(self, E, T, S, C):
+        self.exact_S = interp1d(E, S, 
+                                bounds_error=False,
+                                fill_value=np.NaN)
+        self.exact_C  = interp1d(T, C, 
+                                bounds_error=False,
+                                fill_value=np.NaN)
+    
+    def _query_fname(self, fname,
+                            moves=None,
+                            E=None,
+                            T=None):
         data = dict()
         if fname not in self.fnames:
             return None
@@ -29,14 +58,28 @@ class Results:
             data['mean_e']=self.mean_e[fname]
             data['mean_which']=self.mean_which[fname]
             data['hist']=self.hist[fname]
-            data['E']=self.E[fname]
-            data['S']=self.S[fname]
-            data['errors_S']=self.errors_S[fname]
-
-        data['T']=self.T[fname]
-        data['C']=self.C[fname]
-        data['moves']=self.moves[fname]
-        data['errors_C']=self.errors_C[fname]
+            if E is None:
+                data['E']=self.E[fname]
+                data['S']=self.S[fname]
+            else:
+                data['E']=E
+                data['S']=self.interp_S[fname](E)
+            if moves is None:
+                data['errors_S']=self.errors_S[fname]
+            else:
+                data['errors_S']=self.interp_errors_S[fname](moves)
+        if T is None:
+            data['T']=self.T[fname]
+            data['C']=self.C[fname]
+        else:
+            data['T']=T
+            data['C']=self.interp_C[fname](T)
+        if moves is None:
+            data['moves']=self.moves[fname]
+            data['errors_C']=self.errors_C[fname]
+        else:
+            data['moves'] = moves
+            data['errors_C']=self.interp_errors_C[fname](moves)
         return data
     
     def _mean_data(self, fname):
@@ -71,8 +114,11 @@ class Results:
         return min_data, mean_data, max_data
 
 
-    def _stack_data_by_key(self, fname, key):
-        data_stack = self._query_fname(fname)[key]
+    def _stack_data_by_key(self, fname, key,
+                                moves=None,
+                                E=None,
+                                T=None):
+        data_stack = self._query_fname(fname, moves, E, T)[key]
 
         given_seed = 'seed-'+fname.split('seed-')[-1].split('+')[0]
         #print(given_seed)
@@ -81,7 +127,7 @@ class Results:
                 fname.replace(given_seed, '') and f!=fname
         for f in filter(filt, self.fnames):
             #print(f)
-            new_data = self._query_fname(f)[key]
+            new_data = self._query_fname(f, moves, E, T)[key]
             if new_data is not None:
                 idx = min(data_stack.shape[-1], len(new_data))
                 if len(data_stack.shape) == 1:
@@ -131,18 +177,22 @@ class Results:
                                                 color = styles.color(base), 
                                                 linestyle= styles.linestyle(base), 
                                                 markevery=4)
-        elif method == 'z':
-            plt.plot(data['E'], data['S'], 
-                                    label=label, 
-                                    color = styles.color(base), 
-                                    linestyle= styles.linestyle(base))
-
             if data_bounds is not None:
                 plt.fill_between(lower_data['moves'], lower_data['errors_S'], upper_data['errors_S'],
                                                     color = styles.color(base),
                                                     linestyle=styles.linestyle(base),
                                                     linewidth = 2,
                                                     alpha = 0.2)
+            if self.exact_S is not None:
+                plt.figure('error_dist_S')
+                plt.plot(data['E'], self.exact_S(data['E']) - data['S'], 
+                                                label=label, 
+                                                marker = styles.marker(base), 
+                                                color = styles.color(base), 
+                                                linestyle= styles.linestyle(base), 
+                                                markevery=4)
+
+            
         
         heat_capacity.plot_from_data(data['T'][:len(data['C'])], data['C'],
                                                                     fname=fname,
@@ -161,10 +211,19 @@ class Results:
                                                 color = styles.color(base),
                                                 alpha = 0.2)
         
-        if False:#subplot is not None:
+        if self.exact_C is not None:
+            plt.figure('error_dist_C')
+            plt.plot(data['T'], self.exact_C(data['T']) - data['C'], 
+                                            label=label, 
+                                            marker = styles.marker(base), 
+                                            color = styles.color(base), 
+                                            linestyle= styles.linestyle(base), 
+                                            markevery=4)
+        
+        if subplot is not None:
             axs = subplot[0]
             axins_subplot = subplot[1]
-            if method in {'wl','itwl','sad'}:
+            if method in {'wl','itwl','sad','z'}:
                 axs['(c)'].plot(data['E'][:len(data['S'])], data['S'], 
                                                         label=label, 
                                                         marker = styles.marker(base),
@@ -183,41 +242,29 @@ class Results:
                                                                         axins=axins_subplot)
 
             plt.figure('convergence')
-            if method in {'wl','itwl','sad'}:
+            if method in {'wl','itwl','sad','z'}:
                 axs['(a)'].loglog(data['moves'], data['errors_S'], 
                                                     label=label, 
                                                     marker = styles.marker(base), 
                                                     color = styles.color(base), 
                                                     linestyle= styles.linestyle(base), 
                                                     markevery=2)
-            elif method == 'z':
-                axs['(a)'].loglog(data['moves'], data['errors_S'], 
-                                                    label=label, 
-                                                    color = styles.color(base), 
-                                                    linestyle= styles.linestyle(base), 
-                                                    linewidth = 3)
-            if data_bounds is not None:
-                axs['(a)'].fill_between(lower_data['moves'], lower_data['errors_S'], upper_data['errors_S'],
-                                                    color = styles.color(base),
-                                                    linestyle=styles.linestyle(base),
-                                                    linewidth = 2,
-                                                    alpha = 0.2)
+                if data_bounds is not None:
+                    axs['(a)'].fill_between(lower_data['moves'], lower_data['errors_S'], upper_data['errors_S'],
+                                                        color = styles.color(base),
+                                                        linestyle=styles.linestyle(base),
+                                                        linewidth = 2,
+                                                        alpha = 0.2)
 
 
             plt.figure('convergence-heat-capacity')
-            if method in {'wl','itwl','sad'}:
-                axs['(b)'].loglog(data['moves'], data['errors_C'], 
-                                                    label=label, 
-                                                    marker = styles.marker(base), 
-                                                    color = styles.color(base), 
-                                                    linestyle= styles.linestyle(base), 
-                                                    markevery=2)
-            elif method == 'z':
-                axs['(b)'].loglog(data['moves'], data['errors_C'], 
-                                                    label=label, 
-                                                    color = styles.color(base), 
-                                                    linestyle= styles.linestyle(base), 
-                                                    linewidth = 3)
+            axs['(b)'].loglog(data['moves'], data['errors_C'], 
+                                                label=label, 
+                                                marker = styles.marker(base), 
+                                                color = styles.color(base), 
+                                                linestyle= styles.linestyle(base), 
+                                                markevery=2)
+
             if data_bounds is not None:
                 axs['(b)'].fill_between(lower_data['moves'], lower_data['errors_C'], upper_data['errors_C'],
                                                     color = styles.color(base),
@@ -244,8 +291,20 @@ class Results:
             self.S[fname] = data['S']
             self.E[fname] = data['E']
             self.errors_S[fname] = data['errors_S']
+            self.interp_S[fname]=interp1d(data['E'], data['S'], 
+                                bounds_error=False,
+                                fill_value=np.NaN)
+            self.interp_errors_S[fname]=interp1d(data['moves'], data['errors_S'], 
+                                bounds_error=False,
+                                fill_value=np.NaN)
         self.C[fname] = data['C']
         self.errors_C[fname] = data['errors_C']
+        self.interp_C[fname]=interp1d(data['T'], data['C'], 
+                                bounds_error=False,
+                                fill_value=np.NaN)
+        self.interp_errors_C[fname]=interp1d(data['moves'], data['errors_C'], 
+                                bounds_error=False,
+                                fill_value=np.NaN)
 
 
     def plot_seed(self,
@@ -296,15 +355,26 @@ class Results:
                                     subplot = subplot, 
                                     dump_into_thesis = dump_into_thesis)
     
-    def median_method(self, ax, axins, subplot = None, dump_into_thesis = None):
+    def median_method(self, ax, axins, 
+                                subplot = None, 
+                                dump_into_thesis = None,
+                                moves=None,
+                                E=None,
+                                T=None):
         stacked_data = dict()
         unstacked_data = dict()
         for f in filter(lambda f: 'seed-1+' in f, self.fnames):
             for k in self._query_fname(f).keys():
                 if 'error' in k or 'moves' in k: 
-                    stacked_data[k] = self._stack_data_by_key(f, k)
+                    stacked_data[k] = self._stack_data_by_key(f, k,
+                                                        moves=moves,
+                                                        E=E,
+                                                        T=T)
                 else:
-                    unstacked_data[k] = self._query_fname(f)[k]
+                    unstacked_data[k] = self._query_fname(f,
+                                                        moves=moves,
+                                                        E=E,
+                                                        T=T)[k]
             min_data = dict()
             max_data = dict()
             for k in stacked_data.keys():
@@ -314,6 +384,6 @@ class Results:
             #print(max_data['errors_S'])
             self._plot_from_data(ax, axins, f, 
                                     data = unstacked_data, 
-                                    data_bounds=(min_data, max_data), 
+                                    data_bounds=None,#(min_data, max_data), 
                                     subplot = subplot, 
                                     dump_into_thesis = dump_into_thesis)
