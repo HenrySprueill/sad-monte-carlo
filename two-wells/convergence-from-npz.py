@@ -20,28 +20,6 @@ matplotlib.rcParams['font.family'] = 'STIXGeneral'
 #matplotlib.pyplot.title(r'ABC123 vs $\mathrm{ABC123}^{123}$')
 matplotlib.rcParams.update({'font.size': 16})
 
-def arithmetic_mean(list_of_arr):
-    mu=list_of_arr[0]
-    i=1
-    for arr in list_of_arr[1:]:
-        try:
-            print(len(mu))
-            mu+=arr
-            i+=1 
-        except:
-            pass
-    return mu/i
-
-def geometric_mean(list_of_arr):
-    mu=list_of_arr[0]
-    i=1
-    for arr in list_of_arr[1:]:
-        try:
-            mu*=arr
-            i+=1 
-        except:
-            pass
-    return mu**(1/i)
 
 def legend_handles(exact = False):
     lines=[]
@@ -72,6 +50,8 @@ lowest_interesting_T=0.008
 exact = np.load(os.path.join('.','thesis-data-new',system.name()+'.npz'))
 correct_S=exact['correct_S']
 E=exact['E']
+T=exact['T']
+correct_C=exact['correct_C']
 dE = E[1] - E[0]
 paths = glob.glob(os.path.join('thesis-data-new','*.npz'))
 
@@ -127,7 +107,7 @@ for fname in filter(total_filter, paths):
     i= fname.find('seed') + b.find('+')
     front = fname[i:]
 
-    results = Results()
+    results = Results(E=E, S=correct_S, T=T, C=correct_C)
     for seed in [1, 12, 123, 1234, 12345, 123456, 1234567, 12345678]:
         if seed == 12 and not tem_filter(tail):
             method = os.path.split(fname)[-1].split('+')[0]
@@ -141,32 +121,6 @@ for fname in filter(total_filter, paths):
             if method == 'tem':
                 label = r'TEM' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
             fname = tail + 'seed-' + str(seed) + front
-            data = np.load(fname)
-            for k in data.keys():
-                print(k)
-            E = data['E']
-            error_dist = data['error_dist_S']
-            plt.figure('Entropy error distribution')
-            plt.plot(E, error_dist,
-                        label=label, 
-                        marker = styles.marker(base),
-                        color = styles.color(base), 
-                        linestyle= styles.linestyle(base), 
-                        markevery=75)
-            plt.figure('Canonical error incorrect peak')
-            plt.plot(data['E_dist'], data['can_error_low_T'],
-                        label=label, 
-                        marker = styles.marker(base),
-                        color = styles.color(base), 
-                        linestyle= styles.linestyle(base), 
-                        markevery=75)
-            plt.figure('Canonical error phase transition')
-            plt.plot(data['E_dist'], data['can_error_high_t'],
-                        label=label, 
-                        marker = styles.marker(base),
-                        color = styles.color(base), 
-                        linestyle= styles.linestyle(base), 
-                        markevery=75)
         seed = str(seed)
         try:
             base = fname[:-4]
@@ -176,12 +130,17 @@ for fname in filter(total_filter, paths):
             
             results.add_npz(fname)
             
-        except:
+        except BaseException as err:
+            raise(err)
             print(f'skipping file {fname}')
             pass
-    results.median_method(ax, axins, subplot=(axs, axins_subplot))
+    results.median_method(ax, 
+                        axins, 
+                        subplot=(axs, axins_subplot),
+                        moves = 10**np.linspace(6,13,50),
+                        E=np.linspace(-system.h_small, 0, 10000),
+                        T = np.linspace(system.min_T, 0.25, 10000))
         
-
 
 plt.figure('latest-entropy')
 plt.xlabel(r'$E$')
@@ -194,9 +153,13 @@ plt.savefig(system.system+'-latest-entropy.pdf')
 
 axs['(c)'].set_xlabel(r'$E$')
 axs['(c)'].set_ylabel(r'$S(E)$')
-axs['(c)'].legend(handles = legend_handles(exact=True), loc='lower right')
+
 axs['(c)'].set_ylim(-40,0)
 axs['(c)'].set_xlim(-1.15,-0.85)
+
+legend = plt.legend(handles = legend_handles(exact=True), loc='lower right')
+fig = legend.figure
+fig.canvas.draw()
 
 plt.figure('fraction-well')
 plt.xlabel(r'E')
@@ -215,15 +178,17 @@ plt.figure('convergence')
 plt.xlabel(r'# of Moves')
 plt.ylabel(r'Max Error in $S$')
 plt.ylim(1e-2, 1e3)
-plt.xlim(1e4, 1e12)
+plt.xlim(1e6, 1e13)
 plt.legend()
 
 axs['(a)'].set_xlabel(r'# of Moves')
 axs['(a)'].set_ylabel(r'Max Error in $S$')
 axs['(a)'].set_ylim(1e-2, 1e3)
-axs['(a)'].set_xlim(1e4, 1e12)
-axs['(a)'].legend(handles=legend_handles())
-
+axs['(a)'].set_xlim(1e6, 1e13)
+ax_legend_2 = plt.gca()
+legend = plt.legend(handles=legend_handles())
+fig_2 = legend.figure
+fig_2.canvas.draw()
 #make diagonal lines for convergence
 x = np.linspace(1e-30,1e40,2)
 y = 1/np.sqrt(x)
@@ -237,14 +202,14 @@ plt.figure('convergence-heat-capacity')
 plt.xlabel(r'# of Moves')
 plt.ylabel(r'Max Error in $C_V$')
 plt.ylim(1e-2, 1e3)
-plt.xlim(1e4, 1e12)
+plt.xlim(1e6, 1e13)
 plt.legend()
 
 axs['(b)'].set_xlabel(r'# of Moves')
 axs['(b)'].set_ylabel(r'Max Error in $C_V$')
 axs['(c)'].legend(handles = legend_handles(exact=True), loc='lower right')
 axs['(b)'].set_ylim(1e-2, 1e3)
-axs['(b)'].set_xlim(1e4, 1e12)
+axs['(b)'].set_xlim(1e6, 1e13)
 
 #make diagonal lines for convergence
 x = np.linspace(1e-10,1e20,2)

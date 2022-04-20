@@ -76,8 +76,8 @@ def name():
 
 x_of_cylinder = np.sqrt(R_big**2 - R_small**2)
 total_volume = (0.5*V(n)*R_small**n # the small hemisphere
-#  + x_of_cylinder*scipy.special.hyp2f1(0.5, (n-1)/2, 1.5, x_of_cylinder**2)
-#  - (-R_big)*scipy.special.hyp2f1(0.5, (n-1)/2, 1.5, R_big**2)
+  + x_of_cylinder*scipy.special.hyp2f1(0.5, (n-1)/2, 1.5, x_of_cylinder**2)
+  - (-R_big)*scipy.special.hyp2f1(0.5, (n-1)/2, 1.5, R_big**2)
   + V(n)*R_big**n # FIXME bad approximation of big sphere with top cut off
 )
 print('total_volume', total_volume)
@@ -86,7 +86,7 @@ print('total_volume', total_volume)
 def D(e):
     if e < -h_big:
         return V(n)*R_small**n/2*np.sqrt(e/h_small+1)**(n-2)/total_volume/h_small
-    return (V(n)*R_small**n/2*np.sqrt(e/h_small+1)**(n-2)/h_small + V(n)*R_big**n/2*np.sqrt(e/h_big+1)**(n-2)/h_big)/total_volume
+    return V(n)(R_small**n/2*np.sqrt(e/h_small+1)**(n-2)/h_small + R_big**n/2*np.sqrt(e/h_big+1)**(n-2)/h_big)/total_volume
 D = np.vectorize(D)
 
 def D_simplified(e, energy_barrier=0):
