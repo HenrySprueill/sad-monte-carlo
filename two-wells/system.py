@@ -73,7 +73,7 @@ R_big = 1.
 def V(n):
     return np.pi**(n/2)/(gamma(n/2+1))
 
-def partial_volume(x1, N, prec = 1000, R=1):
+def partial_volume(x1, N, prec = 100000, R=1):
     def integrand(x1_p):
         return V(N-1)*np.sqrt(R**2 - x1_p**2)**(N-1)
     stencil = np.linspace(-R,x1,prec)
@@ -84,12 +84,14 @@ def name():
 
 x_of_cylinder = np.sqrt(R_big**2 - R_small**2)
 vol_big = partial_volume(x_of_cylinder, n, R=1)
-total_volume = (0.5*V(n)*R_small**n + vol_big + V(n-1)*R_small**(n-1))# the small hemisphere
+total_volume = (V(n)*R_small**n + V(n)*R_big**n)#vol_big + V(n-1)*R_small**(n-1))# the small hemisphere
 #   + x_of_cylinder*scipy.special.hyp2f1(0.5, (n-1)/2, 1.5, x_of_cylinder**2)
 #   - (-R_big)*scipy.special.hyp2f1(0.5, (n-1)/2, 1.5, R_big**2)
 #  + V(n)*R_big**n # FIXME bad approximation of big sphere with top cut off
 
 print('total_volume', total_volume)
+print('cylinder_total_volume', 0.5*V(n)*R_small**n + vol_big + V(n-1)*R_small**(n-1))
+print((0.5*V(n)*R_small**n + vol_big + V(n-1)*R_small**(n-1) - total_volume))
 # print('hyper', scipy.special.hyp2f1(0.5, (n-1)/2, 1.5, R_big**2))
 
 

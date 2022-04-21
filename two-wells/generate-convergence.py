@@ -8,10 +8,11 @@ import system, compute
 import heat_capacity, styles
 import glob
 import time
+from tqdm import tqdm
 
 T = np.linspace(0.001,0.01,175)
 
-E = np.linspace(-system.h_small, 0, 10000)
+E = np.linspace(-system.h_small, 0, 100000)
 E = 0.5*(E[1:] + E[:-1])
 dE = E[1] - E[0]
 hist = None
@@ -28,7 +29,7 @@ def normalize_S(S):
     S = S - max(S)
     total = np.sum(np.exp(S)*dE)
     return S - np.log(total)
-if not os.path.exists(system.name()+'-new.npz'):
+if os.path.exists(system.name()+'-new.npz'):
 
     correct_S = normalize_S(system.S(E))
 
@@ -36,7 +37,7 @@ if not os.path.exists(system.name()+'-new.npz'):
 
     T,correct_C = heat_capacity.data(system.S)
 
-    np.savez(system.name(), E=E,
+    np.savez(system.name()+'-new.npz', E=E,
                             T=T,
                             correct_S=normalize_S(system.S(E)),
                             correct_S_for_err=correct_S_for_err,
@@ -51,7 +52,7 @@ else:
 paths = []
 for fname in sorted(glob.glob(os.path.join('thesis-data', '*+'+system.system+'*-lnw.dat'))):
     if not ('half-barrier' in fname):
-        if 'sad' in fname and '0.01' in fname:
+        if 'sad' in fname:
             if True:#not( '0.01+0.001' in fname):
                 paths.append(fname)
         elif ('wl' in fname or 'itwl' in fname) and '0.01' in fname:
@@ -89,7 +90,7 @@ def generate_npz(fname):
     errors_S = []
     errors_C = []
     moves = []
-    for frame_fname in sorted(glob.glob(f'{base}/*-lnw.dat')):
+    for frame_fname in tqdm(sorted(glob.glob(f'{base}/*-lnw.dat'))):
         frame_base =frame_fname[:-8]
 
         frame_moves = int(frame_fname[len(base)+1:-8])
@@ -155,5 +156,5 @@ from multiprocessing import Pool
 
 if __name__ == '__main__':
     pass
-    # with Pool(8) as p:
-    #     p.map(generate_npz, list(paths))
+    with Pool(8) as p:
+        p.map(generate_npz, list(paths))

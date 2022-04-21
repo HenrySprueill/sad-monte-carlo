@@ -11,7 +11,7 @@ T_peak = find_phase_transition.actual_T
 
 def canonical(T, S_func):
     #S-function
-    E = np.linspace(-system.h_small, 0, 10000)
+    E = np.linspace(-system.h_small, 0, 100000)
     E = 0.5*(E[1:] + E[:-1])
     dE = E[1] - E[0]
 
