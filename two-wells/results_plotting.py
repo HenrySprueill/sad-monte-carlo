@@ -4,7 +4,7 @@ import numpy as np
 import glob
 import matplotlib.pyplot as plt
 import system
-import styles
+import styles_poster as styles
 import heat_capacity
 from scipy.interpolate import interp1d
 
@@ -25,6 +25,7 @@ class Results:
         self.interp_C=dict()
         self.interp_errors_S=dict()
         self.interp_errors_C=dict()
+        self.on_grid_interp_errors_C=dict()
 
         if E is None or S is None:
             self.exact_S = None
@@ -35,7 +36,7 @@ class Results:
         if T is None or C is None:
             self.exact_C = None
         else:
-            self.exact_C = interp1d(E, S, 
+            self.exact_C = interp1d(T, C, 
                                 bounds_error=False,
                                 fill_value=np.NaN)
     
@@ -77,9 +78,13 @@ class Results:
         if moves is None:
             data['moves']=self.moves[fname]
             data['errors_C']=self.errors_C[fname]
+            if fname in self.on_grid_interp_errors_C.keys():
+                data['on_grid_errors_C']=self.interp_errors_C[fname](data['moves'])
         else:
             data['moves'] = moves
             data['errors_C']=self.interp_errors_C[fname](moves)
+            if fname in self.on_grid_interp_errors_C.keys():
+                data['on_grid_errors_C']=self.interp_errors_C[fname](moves)
         return data
     
     def _mean_data(self, fname):
@@ -144,7 +149,6 @@ class Results:
             lower_data, upper_data = data_bounds
         base = fname[:-4]
         method = os.path.split(fname)[-1].split('+')[0]
-        print(method)
         if method == 'itwl':
             label = r'$1/t$-WL' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
         if method == 'sad':
@@ -176,7 +180,7 @@ class Results:
                                                 marker = styles.marker(base), 
                                                 color = styles.color(base), 
                                                 linestyle= styles.linestyle(base), 
-                                                markevery=4)
+                                                markevery=2)
             if data_bounds is not None:
                 plt.fill_between(lower_data['moves'], lower_data['errors_S'], upper_data['errors_S'],
                                                     color = styles.color(base),
@@ -190,7 +194,7 @@ class Results:
                                                 marker = styles.marker(base), 
                                                 color = styles.color(base), 
                                                 linestyle= styles.linestyle(base), 
-                                                markevery=4)
+                                                markevery=400)
 
             
         
@@ -205,7 +209,7 @@ class Results:
                                             marker = styles.marker(base), 
                                             color = styles.color(base), 
                                             linestyle= styles.linestyle(base), 
-                                            markevery=4)
+                                            markevery=2)
         if data_bounds is not None:
             plt.fill_between(lower_data['moves'], lower_data['errors_C'], upper_data['errors_C'],
                                                 color = styles.color(base),
@@ -214,11 +218,12 @@ class Results:
         if self.exact_C is not None:
             plt.figure('error_dist_C')
             plt.plot(data['T'], self.exact_C(data['T']) - data['C'], 
-                                            label=label, 
+                                            label=label,
+                                            ms = 5,
                                             marker = styles.marker(base), 
                                             color = styles.color(base), 
                                             linestyle= styles.linestyle(base), 
-                                            markevery=4)
+                                            markevery=400)
         
         if subplot is not None:
             axs = subplot[0]
@@ -305,6 +310,10 @@ class Results:
         self.interp_errors_C[fname]=interp1d(data['moves'], data['errors_C'], 
                                 bounds_error=False,
                                 fill_value=np.NaN)
+        if 'on_grid_errors_C' in data.keys():
+            self.on_grid_interp_errors_C[fname]=interp1d(data['moves'], data['on_grid_errors_C'], 
+                                bounds_error=False,
+                                fill_value=np.NaN)
 
 
     def plot_seed(self,
@@ -387,3 +396,206 @@ class Results:
                                     data_bounds=None,#(min_data, max_data), 
                                     subplot = subplot, 
                                     dump_into_thesis = dump_into_thesis)
+
+    def convergence_method(self, axs,
+                    moves = None,
+                    E= None,
+                    T = None):
+        stacked_data = dict()
+        unstacked_data = dict()
+        for f in filter(lambda f: 'seed-1+' in f, self.fnames):
+            for k in self._query_fname(f).keys():
+                if 'error' in k or 'moves' in k: 
+                    stacked_data[k] = self._stack_data_by_key(f, k,
+                                                        moves=moves,
+                                                        E=E,
+                                                        T=T)
+                else:
+                    unstacked_data[k] = self._query_fname(f,
+                                                        moves=moves,
+                                                        E=E,
+                                                        T=T)[k]
+            min_data = dict()
+            max_data = dict()
+            for k in stacked_data.keys():
+                min_data[k] = np.nanmin(stacked_data[k], axis=0)
+                unstacked_data[k] = np.nanmedian(stacked_data[k], axis=0)
+                max_data[k] = np.nanmax(stacked_data[k], axis=0)
+            
+            if any([method in f for method in ['sad', 'itwl']]):
+                if 'step-0.01' in f:
+                    S_ax = axs['(a)'] if '(a)' in axs.keys() else None
+                    C_ax = axs['(b)'] if '(b)' in axs.keys() else None
+                    self._plot_histogram_convergence(S_ax, C_ax, f, data=unstacked_data)
+                elif 'step-0.001' in f:
+                    self._plot_histogram_convergence(axs['(c)'], axs['(d)'], f, data=unstacked_data)
+                elif 'step-0.0001' in f:
+                    S_ax = axs['(e)'] if '(e)' in axs.keys() else None
+                    C_ax = axs['(f)'] if '(f)' in axs.keys() else None
+                    self._plot_histogram_convergence(S_ax, C_ax, f, data=unstacked_data)
+            if any([method in f for method in ['z', 'tem']]):
+                if 'tem' in f:
+                    S_ax = None
+                    C_ax = axs['(b)'] if '(b)' in axs.keys() else None
+                    self._plot_replica_convergence(None, C_ax, f, data=unstacked_data)
+                elif 'z+' in f:
+                    S_ax = axs['(a)'] if '(a)' in axs.keys() else None
+                    C_ax = axs['(b)'] if '(b)' in axs.keys() else None
+                    self._plot_replica_convergence(S_ax, C_ax, f, data=unstacked_data)
+    
+
+    def _plot_histogram_convergence(self, S_ax, C_ax, fname, data=None):
+
+        if data is None:
+            data = self._query_fname(fname)
+        base = fname[:-4]
+        method = os.path.split(fname)[-1].split('+')[0]
+        if method == 'itwl':
+            label = r'$1/t$-WL' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if method == 'sad':
+            label = r'SAD' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if method == 'z':
+            return
+            label = r'ZMC' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if method == 'tem':
+            return
+            label = r'TEM' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if S_ax is not None:
+            S_ax.loglog(data['moves'], data['errors_S'], 
+                                                label=label, 
+                                                marker = styles.marker(base),
+                                                ms=16,
+                                                color = styles.color(base), 
+                                                linestyle= '-', 
+                                                markevery=4)
+        if C_ax is not None:
+            C_ax.loglog(data['moves'], data['errors_C'], 
+                                                label=label, 
+                                                marker = styles.marker(base), 
+                                                color = styles.color(base), 
+                                                linestyle= '-', 
+                                                markevery=4)
+
+    def _plot_replica_convergence(self, S_ax, C_ax, fname, data=None):
+        if data is None:
+            data = self._query_fname(fname)
+        base = fname[:-4]
+        method = os.path.split(fname)[-1].split('+')[0]
+        if method == 'itwl':
+            label = r'$1/t$-WL' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if method == 'sad':
+            label = r'SAD' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if method == 'z':
+            label = r'ZMC' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if method == 'tem':
+            label = r'PT' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if S_ax is not None:
+            S_ax.loglog(data['moves'], data['errors_S'], 
+                                                label=label, 
+                                                marker = styles.marker(base), 
+                                                color = styles.color(base), 
+                                                ms=16,
+                                                linestyle= '-', 
+                                                markevery=4)
+        on_grid = False
+        if C_ax is not None:
+            if 'on_grid_errors_C' not in data.keys() or not on_grid:
+                C_ax.loglog(data['moves'], data['errors_C'], 
+                                                    label=label, 
+                                                    marker = styles.marker(base), 
+                                                    color = styles.color(base),
+                                                    ms=16, 
+                                                    linestyle='-', 
+                                                    markevery=4)
+            else:
+                C_ax.loglog(data['moves'], data['on_grid_errors_C'], 
+                                                    label=label, 
+                                                    marker = styles.marker(base), 
+                                                    color = styles.color(base), 
+                                                    linestyle= '-', 
+                                                    markevery=4)
+
+    def plot_tempering_distribution(self, fname, dist_ax, C_ax, T):
+
+        data = self._query_fname(fname, T=T)
+        data_uninterp = self._query_fname(fname)
+        base = fname[:-4]
+        method = os.path.split(fname)[-1].split('+')[0]
+        if method == 'itwl':
+            label = r'$1/t$-WL' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+            return
+        if method == 'sad':
+            label = r'SAD' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+            return
+        if method == 'z':
+            label = r'ZMC' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+            return
+        if method == 'tem':
+            label = r'PT' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        dist_ax.plot(T, -(self.exact_C(T) - data['C']), 
+                                            label=label,
+                                            ms = 5,
+                                            color = styles.color(base), 
+                                            linestyle= styles.linestyle(base), 
+                                            markevery=400)
+        dist_ax.scatter(data_uninterp['T'], -(self.exact_C(data_uninterp['T']) - data_uninterp['C']), 
+                                            label=label,
+                                            marker = styles.marker(base),
+                                            color = styles.color(base), 
+                                            linestyle= styles.linestyle(base))
+
+        C_ax.plot(T, data['C'], 
+                                            label=label,
+                                            ms = 5,
+                                            color = styles.color(base), 
+                                            linestyle= styles.linestyle(base), 
+                                            markevery=400)
+        C_ax.scatter(data_uninterp['T'], data_uninterp['C'], 
+                                            label=label,
+                                            marker = styles.marker(base),
+                                            color = styles.color(base), 
+                                            linestyle= styles.linestyle(base))
+        
+        C_ax.plot(T, self.exact_C(T), 
+                                            label='exact',
+                                            marker = styles.marker(None), 
+                                            color = 'k', 
+                                            linestyle= ':')
+
+                        
+    
+    def plot_entropy_distribution(self, fname, dist_ax, S_ax, E):
+        data = self._query_fname(fname, E=E)
+        base = fname[:-4]
+        if styles.get_barrier(base) == '1e-1':
+            return
+        method = os.path.split(fname)[-1].split('+')[0]
+        if method == 'itwl':
+            label = r'$1/t$-WL' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if 'sad' in fname:
+            label = r'SAD' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+            return
+        if method == 'z':
+            label = r'ZMC' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+        if method == 'tem':
+            label = r'PT' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
+            return
+        dist_ax.plot(E, data['S'] - self.exact_S(E), 
+                                            label=label,
+                                            marker = styles.marker(base),
+                                            color = styles.color(base), 
+                                            linestyle= '-', 
+                                            markevery=1000)
+
+        S_ax.plot(E, data['S'], 
+                                            label=label,
+                                            marker = styles.marker(base),
+                                            color = styles.color(base), 
+                                            linestyle= styles.linestyle(base), 
+                                            markevery=1000)
+        
+        S_ax.plot(E, self.exact_S(E), 
+                                            label='exact',
+                                            marker = styles.marker(None), 
+                                            color = 'k', 
+                                            linestyle= ':')

@@ -31,15 +31,15 @@ def legend_handles(exact = False):
                           markersize=8, label=r'SAD')
     itwl_line = mlines.Line2D([], [], color='k', marker='<',
                           markersize=8, label=r'$1/t$-WL')
-    z_line = mlines.Line2D([], [], color='k', marker='o',
-                          markersize=8, label=r'ZMC')
+    #z_line = mlines.Line2D([], [], color='k', marker='o',
+    #                      markersize=8, label=r'ZMC')
     zero_line = mlines.Line2D([], [], color='g', linestyle='-',
                           markersize=12, label=r'$E_{barr}$=0.0')
     one_ten_line = mlines.Line2D([], [], color='tab:orange', linestyle='dashed',
                           markersize=12, label=r'$E_{barr}$=0.1')
     two_ten_line = mlines.Line2D([], [], color='tab:cyan', linestyle='-.',
                           markersize=12, label=r'$E_{barr}$=0.2')
-    lines+=[sad_line, itwl_line, z_line, zero_line, one_ten_line, two_ten_line]
+    lines+=[sad_line, itwl_line,  zero_line, one_ten_line, two_ten_line]
     return lines
 
 lowest_interesting_E = -1.1
@@ -47,7 +47,7 @@ highest_interesting_E = -0.5
 
 lowest_interesting_T=0.008
 
-exact = np.load(os.path.join('.','thesis-data-new',system.name()+'.npz'))
+exact = np.load(os.path.join('.',system.name()+'-new.npz'))
 correct_S=exact['correct_S']
 E=exact['E']
 T=exact['T']
@@ -78,28 +78,17 @@ axs['(d)'].indicate_inset_zoom(axins_subplot, edgecolor="black")
 
 #Combines two strings, truncating the longer one
 #to the length of the shorter one and adding them
-def combine_data(a,b, replace = False):
-    if replace:#return only b--to replace a
-        return b
-    if type(b) is int:
-        return a
-    elif type(a) is int:
-        return b
-    elif len(a) < len(b):
-        return np.concatenate(b[:len(a)] + a, b[len(a):])
-    elif len(a) == len(b):
-        return a+b
-    else:
-        return np.concatenate(a[:len(b)] + b, a[len(b):])
+
 
 z_filter = lambda fname: 'z+' in fname
 tem_filter = lambda fname: 'tem+' in fname
 seed_filter = lambda fname: 'seed-1+' in fname
-step_filter = lambda fname, step: 'de-1e-05+step-'+str(step) in fname
+step_filter = lambda fname, step: any(['de-1e-05+step-'+str(s) in fname for s in step])
 suffix_filter = lambda fname: 'diag' in fname or 'plt' in fname
-barrier1_filter = lambda fname: 'barrier-1+' not in fname and 'barrier-1-small' not in fname
-step = 0.01
-total_filter = lambda fname: (step_filter(fname, step) or z_filter(fname) or tem_filter(fname)) and seed_filter(fname) and suffix_filter(fname) and barrier1_filter(fname)
+barrier1_filter = lambda fname: 'barrier-1+' not in fname and 'barrier-1-small' not in fname #and 'barrier-1e-1' not in fname
+step = [0.01, 0.001, 0.0001]
+total_filter = lambda fname: (step_filter(fname, step)) and seed_filter(fname) and suffix_filter(fname) and barrier1_filter(fname)
+results = Results(E=E, S=correct_S, T=T, C=correct_C)
 for fname in filter(total_filter, paths):
     print(fname)
     tail = fname[:fname.find('seed')]
@@ -107,11 +96,10 @@ for fname in filter(total_filter, paths):
     i= fname.find('seed') + b.find('+')
     front = fname[i:]
 
-    results = Results(E=E, S=correct_S, T=T, C=correct_C)
+    
     for seed in [1, 12, 123, 1234, 12345, 123456, 1234567, 12345678]:
         if seed == 12 and not tem_filter(tail):
             method = os.path.split(fname)[-1].split('+')[0]
-            print(method)
             if method == 'itwl':
                 label = r'$1/t$-WL' + r'-$E_{barr}$=0.'+styles.get_barrier(base)[0]
             if method == 'sad':
@@ -128,18 +116,21 @@ for fname in filter(total_filter, paths):
             fname = tail + 'seed-' + seed + front
             #print(fname)
             
-            results.add_npz(fname)
-            
+            data=np.load(fname)
+            if len(data['moves']) != 0:
+                results.add_npz(fname)
+            else:
+                print(f'skipping file {fname} due to no convergence data')
         except BaseException as err:
             raise(err)
             print(f'skipping file {fname}')
             pass
-    results.median_method(ax, 
-                        axins, 
-                        subplot=(axs, axins_subplot),
-                        moves = 10**np.linspace(6,13,50),
-                        E=np.linspace(-system.h_small, 0, 10000),
-                        T = np.linspace(system.min_T, 0.25, 10000))
+results.median_method(ax, 
+                    axins, 
+                    subplot=(axs, axins_subplot),
+                    moves = 10**np.linspace(6,12,100),
+                    E=np.linspace(-system.h_small, 0, 10000),
+                    T = np.linspace(system.min_T, 0.25, 1000))
         
 
 plt.figure('latest-entropy')
@@ -177,13 +168,13 @@ plt.savefig(system.system+'-histogram.svg')
 plt.figure('convergence')
 plt.xlabel(r'# of Moves')
 plt.ylabel(r'Max Error in $S$')
-plt.ylim(1e-2, 1e3)
+plt.ylim(1e-3, 1e3)
 plt.xlim(1e6, 1e13)
 plt.legend()
 
 axs['(a)'].set_xlabel(r'# of Moves')
 axs['(a)'].set_ylabel(r'Max Error in $S$')
-axs['(a)'].set_ylim(1e-2, 1e3)
+axs['(a)'].set_ylim(1e-3, 1e3)
 axs['(a)'].set_xlim(1e6, 1e13)
 ax_legend_2 = plt.gca()
 legend = plt.legend(handles=legend_handles())
@@ -201,14 +192,14 @@ plt.savefig(system.system+'-convergence.pdf')
 plt.figure('convergence-heat-capacity')
 plt.xlabel(r'# of Moves')
 plt.ylabel(r'Max Error in $C_V$')
-plt.ylim(1e-2, 1e3)
+plt.ylim(1e-3, 1e3)
 plt.xlim(1e6, 1e13)
 plt.legend()
 
 axs['(b)'].set_xlabel(r'# of Moves')
 axs['(b)'].set_ylabel(r'Max Error in $C_V$')
 axs['(c)'].legend(handles = legend_handles(exact=True), loc='lower right')
-axs['(b)'].set_ylim(1e-2, 1e3)
+axs['(b)'].set_ylim(1e-3, 1e3)
 axs['(b)'].set_xlim(1e6, 1e13)
 
 #make diagonal lines for convergence
@@ -240,9 +231,9 @@ for label, ax in axs.items():
 plt.savefig(system.system+'-combined.pdf')
 
 if __name__ == '__main__':
-    dump_into_thesis = False
+    dump_into_thesis = True
     if dump_into_thesis:
         plt.savefig(os.path.join(r'C:\Users\Henry Sprueill\Documents\Coding\Latex\Thesis\figure', 
-                                'step-'+str(step), 
+                                'step-'+str(step[0]), 
                                 system.system+'-combined.pdf'))
     plt.show()
