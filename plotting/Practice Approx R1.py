@@ -1,3 +1,4 @@
+# The trial run for an augmentation that was never finished -Jan through April 2022
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.special as special
@@ -7,7 +8,7 @@ from scipy.optimize import minimize
 
 A = 3.1
 B = 0.2
-C = 0.001
+C = -0.001
 
 Esize = 100
 Estep = 0.1
@@ -17,7 +18,7 @@ dE = Estep
 realS = A + B*E + C*E**2
 realDos = np.exp(realS)
 
-binnum = 100
+binnum = 10
 bstep = Estep*binnum
 bins = np.arange(0+bstep/2,Esize+bstep/2,bstep) #points at the centers, not the dividers
 
@@ -139,9 +140,12 @@ def calcAve2(input_index,A,B,C):
 
 bindex = range(len(bins))
 
-# plt.plot(E,realDos,label="real Dos")
-# plt.plot(bins,W,'.-',label="W from Dos")
-# plt.plot(bins,calcW(bindex,A,B,C),'.-',label="calcW")
+plt.plot(E,realDos,label="real Dos")
+plt.plot(bins,W,'.-',label="W from Dos")
+plt.plot(bins,calcW(bindex,A,B,C),'.--',label="calcW")
+# plt.title('Plot of actual Dos, actual W, and W from the analytic equations')
+plt.xlabel('Total Energy of the whole system (J)')
+plt.ylabel('Density of States (e^Total Entropy)')
 # plt.legend()
 # plt.figure()
 
@@ -166,7 +170,7 @@ bindex = range(len(bins))
 # plt.plot(bins,calcAve2(bindex,A,B,C),'.-',label="calculated Ave2")
 # plt.legend()
 
-# plt.show()
+plt.show()
 
 
 
